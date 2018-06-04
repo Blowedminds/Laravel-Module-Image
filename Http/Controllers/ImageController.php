@@ -7,7 +7,7 @@ use App\Http\Controllers\Controller;
 
 use Illuminate\Support\Facades\Storage;
 
-use App\Image;
+use App\Modules\Image\Image;
 use ImageFactory;
 
 class ImageController extends Controller
