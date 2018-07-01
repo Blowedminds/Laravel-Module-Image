@@ -2,14 +2,14 @@
 
 Route::get('images', 'ImageController@getImages');
 
-Route::get('image/{image}', 'ImageController@getImage');
+Route::get('image/{image}', 'ImageController@getImageFile');
 
-Route::post('image', 'ImageController@postImage');
+Route::post('image', 'ImageController@putImage');
 
-Route::get('edit/{image}', 'ImageController@getEdit');
+Route::get('edit/{image}', 'ImageController@getImage');
 
-Route::put('edit/{image}', 'ImageController@putEdit');
+Route::post('edit/{image}', 'ImageController@postImage');
 
 Route::delete('image/{image}', 'ImageController@deleteImage');
 
-Route::get('thumb/{image}', 'ImageController@getThumb');
+Route::get('thumb/{image}', 'ImageController@getThumbImageFile');

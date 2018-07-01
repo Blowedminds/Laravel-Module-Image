@@ -2,121 +2,45 @@
 
 namespace App\Modules\Image\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Modules\Image\ImageHelper;
 use App\Http\Controllers\Controller;
 
 use Illuminate\Support\Facades\Storage;
 
 use App\Modules\Image\Image;
 use ImageFactory;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
+/**
+ * though we can use middleware instead of imageHelper's canEditImage method, we chose to stick with this implementation
+ * since we care performance rather than better code,
+ *
+ * Class ImageController
+ * @package App\Modules\Image\Http\Controllers
+ */
 class ImageController extends Controller
 {
+    private $imageHelper;
+
     public function __construct()
     {
-        $this->middleware('auth:api', ['only' => ['addImage', 'getImages']]);
-    }
+        $this->middleware('auth:api', ['only' => [
+            'getImages', 'getImage', 'putImage', 'postImage', 'deleteImage'
+        ]]);
 
-    public function postImage(Request $request)
-    {
-        $this->validate($request, [
-            'file' => 'required|image|max:33554432',
-            'public' => 'required',
-            'alt' => 'required'
-        ]);
-
-        $user = auth()->user();
-
-        if (!$request->hasFile('file') && !$request->file('file')->isValid())
-            return response()->json([
-                'header' => 'Dosya Hatası', 'message' => 'Dosyayı alamadık', 'state' => 'error'
-            ]);
-
-        $file = $request->file('file');
-
-        $extension = $file->extension();
-
-        $u_id = uniqid('img_');
-
-        $hash = md5_file($file->getRealPath());
-
-        $name = ($request->has('name') && $request->input('name') != "") ? $request->input('name') : pathInfo($file->getClientOriginalName(), PATHINFO_FILENAME);
-
-        $store_name = $u_id . "." . $extension;
-
-        $size = $file->getClientSize();
-
-        $path = "albums/$u_id/";
-
-        $alt = $request->input('alt');
-
-        /*Check if file already exists*/
-        if (Storage::disk('local')->exists($path . $store_name) && $temp = Image::where('u_id', $u_id)->first())
-            return response()->json([
-                'header' => 'Dosya Hatası', 'message' => 'Dosya oluştururken bir hata oluştu', 'state' => 'error'
-            ]);
-
-        $img = ImageFactory::make($file->getRealPath());
-
-        $original_image = ImageFactory::make($file->getRealPath());
-
-        $webp = ImageFactory::make($file->getRealPath());
-
-        $thumb_nail = ImageFactory::make($file->getRealPath());
-
-        $height = $img->height();
-
-        $width = $img->width();
-
-        if ($width >= 128 || $height >= 128)
-            $thumb_nail = ($width > $height) ? $thumb_nail->resize(128, null, function ($c) {
-                $c->aspectRatio();
-            }) : $thumb_nail->resize(null, 128, function ($c) {
-                $c->aspectRatio();
-            });
-
-        Storage::put($path . $store_name, $original_image->encode($extension, null));
-
-        Storage::put($path . $u_id . ".webp", $webp->encode('webp', null));
-
-        Storage::put($path . 'thumb_' . $store_name, $thumb_nail->encode($extension, null));
-
-        $image = Image::create([
-            'u_id' => $u_id,
-            'size' => $size,
-            'name' => $name,
-            'hash' => $hash,
-            'height' => $height,
-            'width' => $width,
-            'type' => $extension,
-            'alt' => $alt,
-            'owner' => $user->user_id,
-            'public' => ($request->input('public')) ? 1 : 0
-        ]);
-
-        return response()->json([
-            'header' => 'İşlem Başarılı', 'message' => 'Fotoğrafı albüme kaydettik', 'state' => 'success'
-        ], 200);
+        $this->imageHelper = new ImageHelper();
     }
 
     public function getImages()
     {
-        $images = Image::where('public', 1)
+        $images = Image::public()
             ->orWhere('owner', auth()->user()->user_id)
             ->get()
             ->reduce(function ($carry, $image) {
 
-                $key = $image->owner == auth()->user()->user_id && $image->public == 0 ? 'private' : 'public';
+                $key = $image->public == 0 ? 'private' : 'public';
 
-                $carry[$key][] = [
-                    'name' => $image->name,
-                    'size' => $image->size,
-                    'width' => $image->width,
-                    'height' => $image->height,
-                    'type' => $image->type,
-                    'alt' => $image->alt,
-                    'u_id' => $image->u_id
-                ];
+                $carry[$key][] = $image;
 
                 return $carry;
             }, ['private' => [], 'public' => []]);
@@ -124,169 +48,105 @@ class ImageController extends Controller
         return response()->json($images, 200);
     }
 
-    public function getThumb($image)
+    public function getImage(Image $image)
     {
-        $not_found_response = ['header' => 'Hata', 'message' => 'Fotoğrafı bulamadık', 'state' => 'error'];
+        if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id)) {
+            throw new NotFoundHttpException();
+        }
 
-        if (!$image = $this->isAccessible($image))
-            return response()->json($not_found_response, 404);
-
-        return response()->file(storage_path('/app/albums/' . $image->u_id . '/thumb_' . $image->u_id . "." . $image->type),
-            ['Content-Type' => "image/$image->type"]
-        );
+        return response()->json($image, 200);
     }
 
-    public function getImage($image)
+    /**
+     * This method should be called by PUT method, however with PUT method we cannot upload files, at least I was not able to do
+     * so we used POST method and keep naming putImage
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function putImage()
     {
-        $not_found_response = ['header' => 'Hata', 'message' => 'Fotoğrafı bulamadık', 'state' => 'error'];
-
-        if (!$image = $this->isAccessible($image))
-            return response()->json($not_found_response, 404);
-
-        return response()->file(storage_path('/app/albums/' . $image->u_id . '/' . $image->u_id . "." . $image->type),
-            ['Content-Type' => "image/$image->type"]
-        );
-    }
-
-    public function getEdit($image)
-    {
-        if (!$image = self::canEditImage($image, auth()->user()->user_id))
-            return response()->json([
-                'header' => 'Hata', 'message' => 'Aradığınız albüm yok, veya erişim hakkınız yok'
-            ]);
-
-        $data['name'] = $image->name;
-        $data['size'] = $image->size;
-        $data['width'] = $image->width;
-        $data['height'] = $image->height;
-        $data['type'] = $image->type;
-        $data['alt'] = $image->alt;
-        $data['u_id'] = $image->u_id;
-        $data['public'] = $image->public ? true : false;
-
-        return response()->json($data, 200);
-    }
-
-    public function putEdit($image, Request $request)
-    {
-        $user = auth()->user();
-
-        $this->validate($request, [
-            'u_id' => 'required',
-            'name' => 'required',
-            'alt' => 'required',
-            'save_as' => 'required',
-            'public' => 'required'
+        request()->validate([
+            'file' => 'required|image|max:33554432',
+            'public' => 'required',
+            'name' => 'max:255',
+            'alt' => 'max:255'
         ]);
 
-        if ($request->input('u_id') != $image)
-            return response()->json([
-                'header' => 'Hata', 'message' => 'U_ID != IMAGE_URL', 'state' => 'error'
-            ]);
+        $file = request()->file('file');
+        $name = request()->input('name') ?? pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+        $extension = $file->extension();
+        $u_id = uniqid('img_');
+        $store_name = "$u_id.$extension";
+        $path = "albums/$u_id/";
 
+        $image = ImageFactory::make($file->getRealPath());
+        $thumb_nail = $this->imageHelper->resizeThumbNail(ImageFactory::make($file->getRealPath()), 128);
 
-        if (!$image = self::canEditImage($image, $user->user_id))
-            return response()->json([
-                'header' => 'Hata', 'message' => 'Aradığınız albüm yok, veya erişim hakkınız yok', 'state' => 'error'
-            ]);
+        Storage::put($path . $store_name, $image->encode($extension, null));
+        Storage::put($path . 'thumb_' . $store_name, $thumb_nail->encode($extension, null));
 
-        $crop = $request->input('crop');
-        $save_as = $request->input('save_as');
-        $name = $request->input('name');
-        $alt = $request->input('alt');
-        $width = $image->width;
-        $height = $image->height;
-        $u_id = $save_as ? uniqid('img_') : $image->u_id;
-        $public = intval($request->input('public')) ? 1 : 0;
-
-
-        if ($crop == 1) {
-
-            $width = $request->input('width');
-            $height = $request->input('height');
-            $x = $request->input('x');
-            $y = $request->input('y');
-            $rotate = -$request->input('rotate');
-
-            $edit_image = ImageFactory::make(storage_path() . "/app/albums/$image->u_id/$image->u_id.$image->type");
-            $thumb_nail = ImageFactory::make(storage_path() . "/app/albums/$image->u_id/$image->u_id.$image->type");
-            $webp = ImageFactory::make(storage_path() . "/app/albums/$image->u_id/$image->u_id.$image->type");
-
-            $edit_image->rotate($rotate);
-
-            $edit_image->crop($width, $height, $x, $y);
-
-            $thumb_nail->rotate($rotate);
-
-            $thumb_nail->crop($width, $height, $x, $y);
-
-            $webp->rotate($rotate);
-
-            $webp->crop($width, $height, $x, $y);
-
-
-            Storage::put("albums/$u_id/$u_id.$image->type", $edit_image->encode($image->type, null));
-
-            Storage::put("albums/$u_id/$u_id.webp", $webp->encode('webp', null));
-
-            if ($width >= 128 || $height >= 128)
-                $thumb_nail = ($width > $height) ? $thumb_nail->resize(128, null, function ($c) {
-                    $c->aspectRatio();
-                }) : $thumb_nail->resize(null, 128, function ($c) {
-                    $c->aspectRatio();
-                });
-
-            Storage::put("albums/$u_id/thumb_$u_id.$image->type", $thumb_nail->encode($image->type, null));
-
-            $image->hash = ($save_as == 1) ? md5(storage_path() . "/app/albums/$u_id/$u_id.$image->type") : $image->hash;
-        } elseif ($crop == 0 && $save_as == 1) {
-            $edit_image = Storage::get("albums/$image->u_id/$image->u_id.$image->type");
-            $thumb_nail = Storage::get("albums/$image->u_id/thumb_$image->u_id.$image->type");
-            $webp = Storage::get("albums/$image->u_id/$image->u_id.webp");
-
-            Storage::put("albums/$u_id/$u_id.$image->type", $edit_image);
-            Storage::put("albums/$u_id/$u_id.webp", $webp);
-            Storage::put("albums/$u_id/thumb_$u_id.$image->type", $thumb_nail);
-        }
-
-        if ($save_as == 1) {
-
-            Image::create([
-                'u_id' => $u_id,
-                'size' => Storage::size("albums/$u_id/$u_id.$image->type"),
-                'name' => $name,
-                'hash' => md5(storage_path() . "/app/albums/$u_id/$u_id.$image->type"),
-                'height' => $height,
-                'width' => $width,
-                'type' => $image->type,
-                'alt' => $alt,
-                'owner' => $user->user_id,
-                'public' => $public
-            ]);
-        } else {
-            if ($crop == 1) $image->size = Storage::size("albums/$u_id/$u_id.$image->type");
-
-            $image->name = $name;
-            $image->alt = $alt;
-            $image->public = $public;
-            $image->save();
-        }
+        Image::create([
+            'u_id' => $u_id,
+            'size' => $file->getSize(),
+            'name' => $name,
+            'hash' => md5_file($file->getRealPath()),
+            'height' => $image->height(),
+            'width' => $image->width(),
+            'type' => $extension,
+            'alt' => request('alt') ?? $name,
+            'owner' => auth()->user()->user_id,
+            'public' => request()->input('public')
+        ]);
 
         return response()->json([
-            'header' => 'İşlem Başarılı', 'message' => 'Fotoğraf başarı ile düzenlendi', 'state' => 'success'
+            'header' => 'İşlem Başarılı',
+            'message' => 'Fotoğrafı albüme kaydettik',
+            'action' => 'Tamam',
+            'state' => 'success',
+            'data' => ['u_id' => $u_id]
         ], 200);
     }
 
-    public function deleteImage($image)
+    public function postImage(Image $image)
     {
-        $not_found_access_denied = ['header' => 'Hata', 'message' => 'Aradığınız albüm ya yok yada erişemiyorsunuz', 'state' => 'error'];
+        request()->validate([
+            'name' => 'required|max:255',
+            'alt' => 'required|max:255',
+            'public' => 'required',
+            'crop' => 'required'
+        ]);
 
-        if (!$image = self::canEditImage($image, auth()->user()->user_id))
-            return response()->json($not_found_access_denied);
+        if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id)) {
+            throw new NotFoundHttpException();
+        }
 
-        $path = "albums/$image->u_id";
+        if (request()->input('crop') == 1) {
+            $this->imageHelper->cropAndUpdateImage($image, [
+                'width' => request()->input('width'),
+                'height' => request()->input('height'),
+                'x' => request()->input('x'),
+                'y' => request()->input('y'),
+                'rotate' => request()->input('rotate')
+            ]);
+        }
 
-        $file = Storage::deleteDirectory($path);
+        $image->name = request()->input('name');
+        $image->alt = request()->input('alt');
+        $image->public = request()->input('public');
+
+        $image->save();
+
+        return response()->json([
+            'header' => 'İşlem Başarılı', 'message' => 'Fotoğraf kaydedildi', 'action' => 'Tamam', 'state' => 'success'
+        ]);
+    }
+
+    public function deleteImage(Image $image)
+    {
+        if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id)) {
+            throw new NotFoundHttpException();
+        }
+
+        Storage::deleteDirectory("albums/$image->u_id");
 
         $image->forceDelete();
 
@@ -296,23 +156,25 @@ class ImageController extends Controller
 
     }
 
-    private function isAccessible($image_id)
+    public function getThumbImageFile(Image $image)
     {
-        if (!$query = Image::where('u_id', $image_id)->first()) return false;
-        if ($query->public == 1) return $query;
-        if (!$user = AuthApi::authUser()) return false;
-        if ($query->owner != $user->user_id) return false;
-        return $query;
+        if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id ?? '')) {
+            throw new NotFoundHttpException();
+        }
+
+        return response()->file($this->imageHelper->generateThumbImageFilePath($image),
+            ['Content-Type' => "image/$image->type"]
+        );
     }
 
-    protected static function canEditImage($image_u_id, $user_id)
+    public function getImageFile(Image $image)
     {
-        if (!$image = Image::where('u_id', $image_u_id)->first())
-            return false;
+        if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id ?? '')) {
+            throw new NotFoundHttpException();
+        }
 
-        if (!($image->public == 0 && $image->owner == $user_id) && $image->public == 0)
-            return false;
-
-        return $image;
+        return response()->file($this->imageHelper->generateImageFilePath($image),
+            ['Content-Type' => "image/$image->type"]
+        );
     }
 }
