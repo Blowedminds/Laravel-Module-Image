@@ -10,7 +10,7 @@ use ImageFactory;
 
 class ImageHelper
 {
-    public function resizeThumbNail($imageF, $dim)
+    public function resizeToThumbNail($imageF, $dim)
     {
         $width = $imageF->width();
         $height = $imageF->height();
@@ -27,8 +27,6 @@ class ImageHelper
                 });
             }
         }
-
-        return $imageF;
     }
 
     public function canEditImage($image, $user_id)
@@ -51,7 +49,7 @@ class ImageHelper
         $image->size = Storage::size($this->generateRelativePath($image));
         $image->hash = md5_file($this->generateImageFilePath($image));
 
-        $thumbNailF = $this->resizeThumbNail(ImageFactory::make($cropImageF), 128);
+        $thumbNailF = $this->resizeToThumbNail(ImageFactory::make($cropImageF), 128);
         $thumbNailF->save($this->generateThumbImageFilePath($image));
     }
 

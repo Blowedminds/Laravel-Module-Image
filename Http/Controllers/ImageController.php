@@ -79,7 +79,9 @@ class ImageController extends Controller
         $path = "albums/$u_id/";
 
         $image = ImageFactory::make($file->getRealPath());
-        $thumb_nail = $this->imageHelper->resizeThumbNail(ImageFactory::make($file->getRealPath()), 128);
+        $thumb_nail = ImageFactory::make($file->getRealPath());
+
+        $this->imageHelper->resizeToThumbNail($thumb_nail, 128);
 
         Storage::put($path . $store_name, $image->encode($extension, null));
         Storage::put($path . 'thumb_' . $store_name, $thumb_nail->encode($extension, null));
