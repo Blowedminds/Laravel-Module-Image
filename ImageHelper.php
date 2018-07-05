@@ -49,7 +49,10 @@ class ImageHelper
         $image->size = Storage::size($this->generateRelativePath($image));
         $image->hash = md5_file($this->generateImageFilePath($image));
 
-        $thumbNailF = $this->resizeToThumbNail(ImageFactory::make($cropImageF), 128);
+        $thumbNailF = ImageFactory::make($cropImageF);
+
+        $this->resizeToThumbNail($thumbNailF, 128);
+
         $thumbNailF->save($this->generateThumbImageFilePath($image));
     }
 
