@@ -18,11 +18,11 @@ class ImageHelper
         if ($width >= $dim || $height >= $dim) {
 
             if ($width > $height) {
-                $imageF->resize(128, null, function ($c) {
+                $imageF->resize($dim, null, function ($c) {
                     $c->aspectRatio();
                 });
             } else {
-                $imageF->resize(null, 128, function ($c) {
+                $imageF->resize(null, $dim, function ($c) {
                     $c->aspectRatio();
                 });
             }
@@ -51,7 +51,7 @@ class ImageHelper
 
         $thumbNailF = ImageFactory::make($cropImageF);
 
-        $this->resizeToThumbNail($thumbNailF, 128);
+        $this->resizeToThumbNail($thumbNailF, 256);
 
         $thumbNailF->save($this->generateThumbImageFilePath($image));
     }
