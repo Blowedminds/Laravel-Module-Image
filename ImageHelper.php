@@ -58,7 +58,7 @@ class ImageHelper
 
     public function generateThumbImageFilePath($image)
     {
-        return $this->generateImageFilePath($image, 'thumb_');
+        return $this->generateImageFilePath($image, 'thumbs/');
     }
 
     public function generateImageFilePath($image, $prefix = '')
@@ -68,6 +68,8 @@ class ImageHelper
 
     public function generateRelativePath($image, $prefix = '')
     {
-        return "albums/$image->u_id/$prefix$image->u_id.$image->type";
+        $public = $image->public ? 'public/' : '';
+
+        return $public . "images/$prefix$image->u_id";
     }
 }
