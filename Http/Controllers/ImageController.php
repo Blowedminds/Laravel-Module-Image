@@ -68,7 +68,6 @@ class ImageController extends Controller
             'file' => 'required|image|max:33554432',
             'public' => 'required',
             'name' => 'max:255',
-            'alt' => 'max:255'
         ]);
 
         $file = request()->file('file');
@@ -94,7 +93,7 @@ class ImageController extends Controller
             'height' => $image->height(),
             'width' => $image->width(),
             'type' => $extension,
-            'alt' => request('alt') ?? $name,
+            'alt' => request()->input('alt') ?? $name,
             'owner' => auth()->user()->user_id,
             'public' => request()->input('public')
         ]);
