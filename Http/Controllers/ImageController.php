@@ -5,6 +5,7 @@ namespace App\Modules\Image\Http\Controllers;
 use App\Modules\Image\ImageHelper;
 use App\Http\Controllers\Controller;
 
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 
 use App\Modules\Image\Image;
@@ -73,17 +74,19 @@ class ImageController extends Controller
         $file = request()->file('file');
         $name = request()->input('name') ?? pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
         $extension = $file->extension();
-        $u_id = uniqid('img_');
-        $store_name = "$u_id.$extension";
-        $path = "albums/$u_id/";
+        $u_id = uniqid('img_') . "." . $extension;
+        $store_name = $u_id;
+        $path = "images/";
 
         $image = ImageFactory::make($file->getRealPath());
         $thumb_nail = ImageFactory::make($file->getRealPath());
 
-        $this->imageHelper->resizeToThumbNail($thumb_nail, 128);
+        $this->imageHelper->resizeToThumbNail($thumb_nail, 256);
 
-        Storage::put($path . $store_name, $image->encode($extension, null));
-        Storage::put($path . 'thumb_' . $store_name, $thumb_nail->encode($extension, null));
+        $disk = request()->input('public') ? 'public' : 'local';
+
+        Storage::disk($disk)->put($path . $store_name, $image->encode($extension, null));
+        Storage::disk($disk)->put($path . 'thumbs/' . $store_name, $thumb_nail->encode($extension, null));
 
         Image::create([
             'u_id' => $u_id,
@@ -130,9 +133,21 @@ class ImageController extends Controller
             ]);
         }
 
+        $public = request()->input('public');
+
+        if ($image->public != $public) {
+            $disk = $public ? 'public' : 'local';
+            $current_disk = $public ? 'local' : 'public';
+            $full_path_source = Storage::disk($current_disk)->getDriver()->getAdapter()->applyPathPrefix('');
+            $full_path_dest = Storage::disk($disk)->getDriver()->getAdapter()->applyPathPrefix('');
+
+            File::move($full_path_source . 'images/' . $image->u_id, $full_path_dest . 'images/' . $image->u_id);
+            File::move($full_path_source . 'images/thumbs/' . $image->u_id, $full_path_dest . 'images/thumbs/' . $image->u_id);
+        }
+
         $image->name = request()->input('name');
         $image->alt = request()->input('alt');
-        $image->public = request()->input('public');
+        $image->public = $public;
 
         $image->save();
 
@@ -146,8 +161,10 @@ class ImageController extends Controller
         if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id)) {
             throw new NotFoundHttpException();
         }
+        $disk = $image->public ? 'public' : 'local';
 
-        Storage::deleteDirectory("albums/$image->u_id");
+        Storage::disk($disk)->delete("images/$image->u_id");
+        Storage::disk($disk)->delete("images/thumbs/$image->u_id");
 
         $image->forceDelete();
 
@@ -162,8 +179,10 @@ class ImageController extends Controller
         if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id ?? '')) {
             throw new NotFoundHttpException();
         }
-
-        return response()->file($this->imageHelper->generateThumbImageFilePath($image),
+        if (!Storage::disk('local')->has('images/thumbs/' . $image->u_id)) {
+            throw new NotFoundHttpException();
+        }
+        return response()->file($this->imageHelper->generateImageFilePath($image),
             ['Content-Type' => "image/$image->type"]
         );
     }
@@ -171,6 +190,9 @@ class ImageController extends Controller
     public function getImageFile(Image $image)
     {
         if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id ?? '')) {
+            throw new NotFoundHttpException();
+        }
+        if (!Storage::disk('local')->has('images/' . $image->u_id)) {
             throw new NotFoundHttpException();
         }
 

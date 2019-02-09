@@ -18,11 +18,11 @@ class ImageHelper
         if ($width >= $dim || $height >= $dim) {
 
             if ($width > $height) {
-                $imageF->resize(128, null, function ($c) {
+                $imageF->resize($dim, null, function ($c) {
                     $c->aspectRatio();
                 });
             } else {
-                $imageF->resize(null, 128, function ($c) {
+                $imageF->resize(null, $dim, function ($c) {
                     $c->aspectRatio();
                 });
             }
@@ -51,14 +51,14 @@ class ImageHelper
 
         $thumbNailF = ImageFactory::make($cropImageF);
 
-        $this->resizeToThumbNail($thumbNailF, 128);
+        $this->resizeToThumbNail($thumbNailF, 256);
 
         $thumbNailF->save($this->generateThumbImageFilePath($image));
     }
 
     public function generateThumbImageFilePath($image)
     {
-        return $this->generateImageFilePath($image, 'thumb_');
+        return $this->generateImageFilePath($image, 'thumbs/');
     }
 
     public function generateImageFilePath($image, $prefix = '')
@@ -68,6 +68,8 @@ class ImageHelper
 
     public function generateRelativePath($image, $prefix = '')
     {
-        return "albums/$image->u_id/$prefix$image->u_id.$image->type";
+        $public = $image->public ? 'public/' : '';
+
+        return $public . "images/$prefix$image->u_id";
     }
 }
