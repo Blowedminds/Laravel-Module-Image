@@ -27,3 +27,9 @@ This module supports backend for Angular-Module-Image
  `
 3. Migrate the database. `php artisan migrate --path=/app/Modules/Image/Database/migrations`
 
+4. Add the following routes to `routes/web.php` , 
+`
+    Route::get('storage/images/{image}', 'ImageController@getImageFile');
+    Route::get('storage/images/thumbs/{image}', '\App\Modules\Image\Http\Controllers\ImageController@getThumbImageFile');
+`    
+
