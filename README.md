@@ -32,4 +32,7 @@ This module supports backend for Angular-Module-Image
     Route::get('storage/images/{image}', '\App\Modules\Image\Http\Controllers\ImageController@getImageFile');
     Route::get('storage/images/thumbs/{image}', '\App\Modules\Image\Http\Controllers\ImageController@getThumbImageFile');
 `    
+5. Add `Intervention\Image\Facades\Image` class as aliases `ImageFactory`
+ in `config/app.php` file. eg 
+    `'ImageFactory' => Intervention\Image\Facades\Image::class`
 
