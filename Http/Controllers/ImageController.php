@@ -81,7 +81,7 @@ class ImageController extends Controller
         $image = ImageFactory::make($file->getRealPath());
         $thumb_nail = ImageFactory::make($file->getRealPath());
 
-        $this->imageHelper->resizeToThumbNail($thumb_nail, 256);
+        $this->imageHelper->resizeToThumbNail($thumb_nail, 384);
 
         $disk = request()->input('public') ? 'public' : 'local';
 
