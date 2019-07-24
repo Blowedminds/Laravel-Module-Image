@@ -25,7 +25,7 @@ class ImageController extends Controller
 
     public function __construct()
     {
-        $this->middleware('auth:api', ['only' => [
+        $this->middleware(['auth:api', 'permission:ownership.image'], ['only' => [
             'getImages', 'getImage', 'putImage', 'postImage', 'deleteImage'
         ]]);
 
@@ -176,23 +176,20 @@ class ImageController extends Controller
 
     public function getThumbImageFile(Image $image)
     {
-        if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id ?? '')) {
-            throw new NotFoundHttpException();
-        }
-        if (!Storage::disk('local')->has('images/thumbs/' . $image->u_id)) {
-            throw new NotFoundHttpException();
-        }
-        return response()->file($this->imageHelper->generateImageFilePath($image),
-            ['Content-Type' => "image/$image->type"]
-        );
+        return $this->getFile($image, 'images/thumbs/');
     }
 
     public function getImageFile(Image $image)
     {
+        return $this->getFile($image, 'images/');
+    }
+
+    private function getFile(Image $image, $path)
+    {
         if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id ?? '')) {
             throw new NotFoundHttpException();
         }
-        if (!Storage::disk('local')->has('images/' . $image->u_id)) {
+        if (!Storage::disk('local')->has($path . $image->u_id)) {
             throw new NotFoundHttpException();
         }
 
