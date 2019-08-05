@@ -36,7 +36,8 @@ class ImageHelper
 
     public function cropAndUpdateImage($image, $cropData)
     {
-        $cropImageF = ImageFactory::make($this->generateImageFilePath($image));
+        $image_path = $this->generateImageFilePath($image);
+        $cropImageF = ImageFactory::make($image_path);
 
         $cropImageF->rotate(360 - $cropData['rotate']);
         $cropImageF->crop($cropData['width'], $cropData['height'], $cropData['x'], $cropData['y']);
@@ -46,8 +47,8 @@ class ImageHelper
 
         $cropImageF->save();
 
-        $image->size = Storage::size($this->generateRelativePath($image));
-        $image->hash = md5_file($this->generateImageFilePath($image));
+        $image->size = Storage::disk($image->public ? 'public' : 'local')->size($this->generateRelativePath($image));
+        $image->hash = md5_file($image_path);
 
         $thumbNailF = ImageFactory::make($cropImageF);
 
@@ -63,13 +64,13 @@ class ImageHelper
 
     public function generateImageFilePath($image, $prefix = '')
     {
-        return storage_path('/app/'.$this->generateRelativePath($image, $prefix));
+        $disk = $image->public ? 'public' : 'local';
+
+        return Storage::disk($disk)->path($this->generateRelativePath($image, $prefix));
     }
 
     public function generateRelativePath($image, $prefix = '')
     {
-        $public = $image->public ? 'public/' : '';
-
-        return $public . "images/$prefix$image->u_id";
+        return "images/$prefix$image->u_id";
     }
 }
