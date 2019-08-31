@@ -166,7 +166,6 @@ class ImageController extends Controller
 
     private function getFile(Image $image, $path)
     {
-        dump(auth()->user());
         if (!$this->imageHelper->canEditImage($image, auth()->user()->user_id ?? '')) {
             abort(404);
         }
