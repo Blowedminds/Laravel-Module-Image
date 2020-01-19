@@ -24,7 +24,7 @@ class Image extends Model
      * @var array
      */
     protected $hidden = [
-
+        'hash', 'pivot', 'owner'
     ];
 
     public function getRouteKeyName()
