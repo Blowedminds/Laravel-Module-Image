@@ -16,6 +16,7 @@ class CreateImageablesTable extends Migration
         Schema::create('imageables', function (Blueprint $table) {
             $table->increments('id');
             $table->string('image');
+            $table->integer('weight')->default(0);
             $table->unsignedInteger('imageable_id');
             $table->string('imageable_type');
             $table->timestamps();
